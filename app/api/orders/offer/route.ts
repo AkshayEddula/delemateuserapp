@@ -118,20 +118,22 @@ async function moveToNextRider(orderId: string) {
 
     const offeredRiderIds = existingOffers?.map(offer => offer.rider_id) || []
 
-    // Find available riders who haven't been offered yet
-    const { data: riders, error: ridersError } = await supabase
+    // Find all available riders first
+    const { data: allRiders, error: ridersError } = await supabase
       .from('users')
       .select('id, lat, lng, name, phone')
       .eq('role', 'rider')
       .eq('is_online', true)
       .not('lat', 'is', null)
       .not('lng', 'is', null)
-      .not('id', 'in', `(${offeredRiderIds.join(',')})`)
 
     if (ridersError) {
       console.error('Error fetching riders:', ridersError)
       return NextResponse.json({ error: ridersError.message }, { status: 500 })
     }
+
+    // Filter out riders who have already been offered
+    const riders = allRiders?.filter(rider => !offeredRiderIds.includes(rider.id)) || []
 
     if (!riders || riders.length === 0) {
       // No more riders available - cancel order

@@ -57,21 +57,25 @@ async function moveToNextRider(orderId: string) {
     }
 
     const offeredRiderIds = existingOffers?.map(offer => offer.rider_id) || []
+    console.log(`Order ${orderId}: Already offered to riders:`, offeredRiderIds)
 
-    // Find available riders who haven't been offered yet
-    const { data: riders, error: ridersError } = await supabase
+    // Find all available riders first
+    const { data: allRiders, error: ridersError } = await supabase
       .from('users')
       .select('id, lat, lng, name, phone')
       .eq('role', 'rider')
       .eq('is_online', true)
       .not('lat', 'is', null)
       .not('lng', 'is', null)
-      .not('id', 'in', `(${offeredRiderIds.join(',')})`)
 
     if (ridersError) {
       console.error('Error fetching riders:', ridersError)
       return NextResponse.json({ error: ridersError.message }, { status: 500 })
     }
+
+    // Filter out riders who have already been offered
+    const riders = allRiders?.filter(rider => !offeredRiderIds.includes(rider.id)) || []
+    console.log(`Order ${orderId}: Available riders after filtering:`, riders.length, riders.map(r => r.id))
 
     if (!riders || riders.length === 0) {
       // No more riders available - cancel order
@@ -110,6 +114,7 @@ async function moveToNextRider(orderId: string) {
     const nextRider = [...ridersOnRoute, ...otherRiders][0]
 
     if (nextRider) {
+      console.log(`Order ${orderId}: Offering to next rider:`, nextRider.id, nextRider.name)
       const offerExpiresAt = new Date(Date.now() + 2 * 60 * 1000) // 2 minutes from now
       
       // Create offer for next rider
@@ -248,6 +253,7 @@ export async function POST(request: NextRequest) {
       })
     } else {
       // Rider declined - immediately move to next rider
+      console.log(`Rider ${rider_id} declined order ${order_id}, moving to next rider...`)
       return await moveToNextRider(order_id)
     }
   } catch (error) {

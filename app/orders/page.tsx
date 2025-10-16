@@ -85,7 +85,19 @@ export default function CreateOrderPage() {
   }, [user?.id])
 
   const handlePackageChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setPackageDetails(prev => ({ ...prev, [e.target.name]: e.target.value }))
+    let value = e.target.value
+    
+    // Format phone number for Indian numbers
+    if (e.target.name === 'receiverPhone') {
+      // Remove all non-digits
+      value = value.replace(/\D/g, '')
+      // Limit to 10 digits
+      if (value.length > 10) {
+        value = value.slice(0, 10)
+      }
+    }
+    
+    setPackageDetails(prev => ({ ...prev, [e.target.name]: value }))
     // Clear error when user starts typing
     if (errors[e.target.name]) {
       setErrors(prev => ({ ...prev, [e.target.name]: '' }))
@@ -117,24 +129,39 @@ export default function CreateOrderPage() {
     
     if (!packageDetails.receiverName.trim()) {
       newErrors.receiverName = 'Receiver name is required'
+    } else if (packageDetails.receiverName.trim().length < 2) {
+      newErrors.receiverName = 'Name must be at least 2 characters'
     }
+    
     if (!packageDetails.receiverPhone.trim()) {
       newErrors.receiverPhone = 'Receiver phone is required'
-    } else if (!/^[\+]?[1-9][\d]{0,15}$/.test(packageDetails.receiverPhone.replace(/\s/g, ''))) {
-      newErrors.receiverPhone = 'Please enter a valid phone number'
+    } else {
+      // Indian phone number validation (10 digits, can start with +91 or 0)
+      const phoneRegex = /^(\+91|91|0)?[6-9]\d{9}$/
+      const cleanPhone = packageDetails.receiverPhone.replace(/\s/g, '')
+      if (!phoneRegex.test(cleanPhone)) {
+        newErrors.receiverPhone = 'Please enter a valid 10-digit Indian phone number'
+      }
     }
+    
     if (!packageDetails.category) {
       newErrors.category = 'Please select a category'
     }
+    
     if (!packageDetails.weight.trim()) {
       newErrors.weight = 'Weight is required'
     } else if (isNaN(Number(packageDetails.weight)) || Number(packageDetails.weight) <= 0) {
-      newErrors.weight = 'Please enter a valid weight'
+      newErrors.weight = 'Please enter a valid weight (must be greater than 0)'
+    } else if (Number(packageDetails.weight) > 50) {
+      newErrors.weight = 'Weight cannot exceed 50 kg'
     }
+    
     if (!packageDetails.estimatedValue.trim()) {
       newErrors.estimatedValue = 'Estimated value is required'
     } else if (isNaN(Number(packageDetails.estimatedValue)) || Number(packageDetails.estimatedValue) <= 0) {
-      newErrors.estimatedValue = 'Please enter a valid value'
+      newErrors.estimatedValue = 'Please enter a valid value (must be greater than 0)'
+    } else if (Number(packageDetails.estimatedValue) > 100000) {
+      newErrors.estimatedValue = 'Value cannot exceed ₹1,00,000'
     }
     
     setErrors(newErrors)
@@ -403,21 +430,27 @@ export default function CreateOrderPage() {
                 placeholder="Enter receiver name"
                 value={packageDetails.receiverName}
                 onChange={handlePackageChange}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 ${errors.receiverName ? 'border-red-300' : 'border-gray-200'}`}
+                    className={`w-full px-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.receiverName ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
               />
                   {errors.receiverName && <p className="text-red-500 text-sm mt-1">{errors.receiverName}</p>}
             </div>
                 
             <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Receiver Phone *</label>
-              <input
-                type="text"
-                name="receiverPhone"
-                placeholder="Enter phone number"
-                value={packageDetails.receiverPhone}
-                onChange={handlePackageChange}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 ${errors.receiverPhone ? 'border-red-300' : 'border-gray-200'}`}
-              />
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+                  📱
+                </div>
+                <input
+                  type="tel"
+                  name="receiverPhone"
+                  placeholder="Enter 10-digit phone number"
+                  value={packageDetails.receiverPhone}
+                  onChange={handlePackageChange}
+                  maxLength="10"
+                      className={`w-full pl-12 pr-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.receiverPhone ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                />
+              </div>
                   {errors.receiverPhone && <p className="text-red-500 text-sm mt-1">{errors.receiverPhone}</p>}
             </div>
                 
@@ -427,41 +460,60 @@ export default function CreateOrderPage() {
                 name="category"
                 value={packageDetails.category}
                 onChange={handlePackageChange}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 ${errors.category ? 'border-red-300' : 'border-gray-200'}`}
+                    className={`w-full px-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 text-base ${errors.category ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
               >
                 <option value="">Select category</option>
-                    <option value="Documents">Documents</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Clothing">Clothing</option>
-                    <option value="Food">Food</option>
-                    <option value="Other">Other</option>
+                    <option value="Documents">📄 Documents</option>
+                    <option value="Electronics">📱 Electronics</option>
+                    <option value="Clothing">👕 Clothing</option>
+                    <option value="Food">🍕 Food</option>
+                    <option value="Books">📚 Books</option>
+                    <option value="Medicines">💊 Medicines</option>
+                    <option value="Gifts">🎁 Gifts</option>
+                    <option value="Other">📦 Other</option>
               </select>
                   {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category}</p>}
             </div>
                 
             <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Weight (kg) *</label>
-              <input
-                type="text"
-                name="weight"
-                placeholder="Enter weight"
-                value={packageDetails.weight}
-                onChange={handlePackageChange}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 ${errors.weight ? 'border-red-300' : 'border-gray-200'}`}
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  name="weight"
+                  placeholder="Enter weight in kg"
+                  value={packageDetails.weight}
+                  onChange={handlePackageChange}
+                  min="0.1"
+                  max="50"
+                  step="0.1"
+                      className={`w-full px-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.weight ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                />
+                <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 font-medium">
+                  kg
+                </div>
+              </div>
                   {errors.weight && <p className="text-red-500 text-sm mt-1">{errors.weight}</p>}
             </div>
                 
             <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Value ($) *</label>
-              <input
-                type="text"
-                name="estimatedValue"
-                placeholder="Enter value"
-                value={packageDetails.estimatedValue}
-                onChange={handlePackageChange}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 ${errors.estimatedValue ? 'border-red-300' : 'border-gray-200'}`}
-              />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Value *</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium text-lg">
+                  ₹
+                </div>
+                <input
+                  type="number"
+                  name="estimatedValue"
+                  placeholder="Enter value"
+                  value={packageDetails.estimatedValue}
+                  onChange={handlePackageChange}
+                  min="1"
+                  max="100000"
+                  step="1"
+                      className={`w-full pl-8 pr-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.estimatedValue ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                />
+              </div>
                   {errors.estimatedValue && <p className="text-red-500 text-sm mt-1">{errors.estimatedValue}</p>}
             </div>
                 
@@ -469,12 +521,16 @@ export default function CreateOrderPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
               <textarea
                 name="description"
-                placeholder="Describe your package..."
+                placeholder="Describe your package (optional)..."
                 value={packageDetails.description}
                 onChange={handlePackageChange}
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 resize-none"
+                rows={4}
+                maxLength={200}
+                className="w-full px-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 resize-none text-base hover:border-gray-300"
               />
+              <div className="text-right text-xs text-gray-400 mt-1">
+                {packageDetails.description.length}/200 characters
+              </div>
                 </div>
               </div>
 
@@ -517,13 +573,31 @@ export default function CreateOrderPage() {
 
                 <div className="bg-gray-50 rounded-xl p-6">
                   <h3 className="font-semibold text-gray-900 mb-4">Package Details</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div><strong>Receiver:</strong> {packageDetails.receiverName}</div>
-                    <div><strong>Phone:</strong> {packageDetails.receiverPhone}</div>
-                    <div><strong>Category:</strong> {packageDetails.category}</div>
-                    <div><strong>Weight:</strong> {packageDetails.weight} kg</div>
-                    <div><strong>Value:</strong> ${packageDetails.estimatedValue}</div>
-                    <div><strong>Description:</strong> {packageDetails.description || 'None'}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">👤</span>
+                      <span><strong>Receiver:</strong> {packageDetails.receiverName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">📱</span>
+                      <span><strong>Phone:</strong> {packageDetails.receiverPhone}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">📦</span>
+                      <span><strong>Category:</strong> {packageDetails.category}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">⚖️</span>
+                      <span><strong>Weight:</strong> {packageDetails.weight} kg</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">💰</span>
+                      <span><strong>Value:</strong> ₹{packageDetails.estimatedValue}</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-gray-500 mt-1">📝</span>
+                      <span><strong>Description:</strong> {packageDetails.description || 'None'}</span>
+                    </div>
             </div>
           </div>
         </div>

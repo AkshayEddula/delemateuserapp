@@ -46,21 +46,25 @@ async function moveToNextRider(orderId: string, order: any) {
     }
 
     const offeredRiderIds = existingOffers?.map(offer => offer.rider_id) || []
+    console.log(`Timer moveToNextRider for order ${orderId}: Already offered to riders:`, offeredRiderIds)
 
-    // Find available riders who haven't been offered yet
-    const { data: riders, error: ridersError } = await supabase
+    // Find all available riders first
+    const { data: allRiders, error: ridersError } = await supabase
       .from('users')
       .select('id, lat, lng, name, phone')
       .eq('role', 'rider')
       .eq('is_online', true)
       .not('lat', 'is', null)
       .not('lng', 'is', null)
-      .not('id', 'in', `(${offeredRiderIds.join(',')})`)
 
     if (ridersError) {
       console.error('Error fetching riders:', ridersError)
       return { success: false, error: ridersError.message }
     }
+
+    // Filter out riders who have already been offered
+    const riders = allRiders?.filter(rider => !offeredRiderIds.includes(rider.id)) || []
+    console.log(`Timer moveToNextRider for order ${orderId}: Available riders after filtering:`, riders.length, riders.map(r => r.id))
 
     if (!riders || riders.length === 0) {
       // No more riders available - cancel order
@@ -99,6 +103,7 @@ async function moveToNextRider(orderId: string, order: any) {
     const nextRider = [...ridersOnRoute, ...otherRiders][0]
 
     if (nextRider) {
+      console.log(`Timer moveToNextRider for order ${orderId}: Offering to next rider:`, nextRider.id, nextRider.name)
       const offerExpiresAt = new Date(Date.now() + 2 * 60 * 1000) // 2 minutes from now
       
       // Create offer for next rider
@@ -199,15 +204,19 @@ export async function GET(request: NextRequest) {
     const currentOffer = order.order_offers?.find(offer => offer.status === 'offered')
     const declinedOffers = order.order_offers?.filter(offer => offer.status === 'declined') || []
     
-    // If current offer was declined, we need to move to next rider immediately
-    if (declinedOffers.length > 0 && currentOffer) {
-      // Check if the current offer was created after the last declined offer
-      const lastDeclinedOffer = declinedOffers.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0]
+    console.log(`Timer check for order ${orderId}:`, {
+      currentOffer: currentOffer?.rider_id,
+      declinedCount: declinedOffers.length,
+      declinedRiders: declinedOffers.map(d => d.rider_id)
+    })
+    
+    // If there are declined offers and we have a current offer, check if we need to progress
+    if (declinedOffers.length > 0) {
+      // Check if the current offer is the same as any declined offer (shouldn't happen, but just in case)
+      const currentOfferDeclined = declinedOffers.some(declined => declined.rider_id === currentOffer?.rider_id)
       
-      if (new Date(currentOffer.created_at) < new Date(lastDeclinedOffer.created_at)) {
-        // Current offer is older than the decline, need to progress
+      if (currentOfferDeclined || !currentOffer) {
+        console.log(`Order ${orderId}: Current offer was declined or no current offer, progressing to next rider`)
         const progressionResult = await moveToNextRider(orderId, order)
         
         if (progressionResult.success) {
@@ -215,7 +224,7 @@ export async function GET(request: NextRequest) {
             hasTimer: true,
             status: 'assigned',
             currentRider: {
-              number: 1, // This will be updated by the next timer call
+              number: declinedOffers.length + 1,
               timeRemaining: 120
             },
             totalTimeRemaining: 1800 - Math.floor((now.getTime() - orderCreatedAt.getTime()) / 1000),
