@@ -33,8 +33,8 @@ export default function CreateOrderPage() {
   })
 
   const [status, setStatus] = useState<'idle'|'checking'|'waiting'|'cancelled'|'success'>('idle')
-  const [timer, setTimer] = useState(30)
-  const [totalTimer, setTotalTimer] = useState(120)
+  const [timer, setTimer] = useState(120) // 2 minutes per rider
+  const [totalTimer, setTotalTimer] = useState(1800) // 30 minutes total
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null)
   const [orderHistory, setOrderHistory] = useState<any[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -50,11 +50,12 @@ export default function CreateOrderPage() {
       interval = setInterval(() => {
         setTotalTimer(prev => {
           const newTotal = prev - 1
-          // Update the display timer (30s for first round, then remaining time)
-          if (newTotal > 90) {
-            setTimer(newTotal - 90) // Show countdown from 30 to 0
+          // Update the display timer (2 minutes per rider)
+          const currentRiderTime = newTotal % 120 // 2 minutes = 120 seconds
+          if (currentRiderTime === 0 && newTotal > 0) {
+            setTimer(120) // Reset to 2 minutes for next rider
           } else {
-            setTimer(newTotal) // Show remaining time after first round
+            setTimer(currentRiderTime)
           }
           return newTotal
         })
@@ -213,8 +214,8 @@ export default function CreateOrderPage() {
     setErrors({})
     setStatus('idle')
     setShowModal(false)
-    setTimer(30)
-    setTotalTimer(120)
+    setTimer(120) // 2 minutes per rider
+    setTotalTimer(1800) // 30 minutes total
   }
 
   const handleSubmit = async () => {
@@ -295,64 +296,11 @@ export default function CreateOrderPage() {
     }
 
     if (responseData.status === 'assigned') {
-    setStatus('waiting')
-      setTimer(30) // 30 seconds for rider response
-
-      // Set timeout to expand to more drivers after 30 seconds
-      const expandTimeout = setTimeout(async () => {
-        try {
-          const response = await fetch('/api/orders/expand', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: order.id })
-          })
-          const data = await response.json()
-          
-          if (data.status === 'expanded') {
-            console.log('Order expanded to more drivers:', data.riders)
-          }
-        } catch (error) {
-          console.error('Error expanding order:', error)
-        }
-      }, 30000) // 30 seconds
-
-      // Poll for order status updates
-      const pollInterval = setInterval(async () => {
-        try {
-          const statusResponse = await fetch(`/api/orders/status?order_id=${order.id}`)
-          const statusData = await statusResponse.json()
-          
-          if (statusData.status === 'accepted') {
-            setStatus('success')
-            clearInterval(pollInterval)
-            clearTimeout(expandTimeout)
-            // Redirect to tracking page after a short delay
-            setTimeout(() => {
-              window.location.href = `/orders/track/${order.id}`
-            }, 2000)
-            // Refresh history
-            fetchOrderHistory()
-          } else if (statusData.status === 'cancelled') {
-            setStatus('cancelled')
-            clearInterval(pollInterval)
-            clearTimeout(expandTimeout)
-            // Refresh history
-            fetchOrderHistory()
-          }
-        } catch (error) {
-          console.error('Error polling order status:', error)
-        }
-      }, 2000) // Poll every 2 seconds
-
-      // Clear polling after 120 seconds total
-      const pollTimeout = setTimeout(() => {
-        clearInterval(pollInterval)
-        clearTimeout(expandTimeout)
-        setStatus('cancelled')
-      }, 120000) // 120 seconds total
-
-      setTimeoutId(pollTimeout)
-      }
+      // Immediately redirect to tracking page
+      console.log('Order created successfully, redirecting to tracking page')
+      window.location.href = `/orders/track/${order.id}`
+      return
+    }
   }
 
   return (
@@ -613,15 +561,12 @@ export default function CreateOrderPage() {
         {status === 'waiting' && (
                <div className="text-center">
                  <div className="w-16 h-16 border-4 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Waiting for Driver</h3>
+                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Waiting for Rider</h3>
                  <p className="text-gray-600">
-                   {totalTimer > 90 
-                     ? `First round: ${timer} seconds remaining...`
-                     : `Searching other drivers: ${timer} seconds remaining...`
-                   }
+                   {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')} remaining for current rider
                  </p>
                  <p className="text-sm text-gray-500 mt-2">
-                   Total time: {totalTimer} seconds
+                   Total time: {Math.floor(totalTimer / 60)}:{(totalTimer % 60).toString().padStart(2, '0')} remaining
                  </p>
                </div>
              )}

@@ -19,11 +19,29 @@ export async function GET(request: NextRequest) {
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
-        *,
+        id,
+        user_id,
+        pickup_lat,
+        pickup_lng,
+        drop_lat,
+        drop_lng,
+        distance_km,
+        total_price,
+        commission,
+        rider_earnings,
+        package_details,
+        status,
+        offer_expires_at,
+        created_at,
         order_offers!inner(
           id,
           status,
           created_at
+        ),
+        users!orders_user_id_fkey(
+          id,
+          name,
+          phone
         )
       `)
       .eq('status', 'assigned')

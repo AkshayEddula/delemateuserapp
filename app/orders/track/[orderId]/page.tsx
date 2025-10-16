@@ -20,6 +20,17 @@ type Order = {
     name: string
     phone: string
   }
+  pricing?: {
+    distance: number
+    totalPrice: number
+    commission: number
+    riderEarnings: number
+    breakdown: {
+      baseFare: number
+      distanceFare: number
+      commissionRate: number
+    }
+  }
 }
 
 type DriverLocation = {
@@ -49,6 +60,10 @@ export default function OrderTrackingPage() {
   const [driverMarker, setDriverMarker] = useState<google.maps.Marker | null>(null)
   const [pickupMarker, setPickupMarker] = useState<google.maps.Marker | null>(null)
   const [dropMarker, setDropMarker] = useState<google.maps.Marker | null>(null)
+  const [timer, setTimer] = useState(0)
+  const [totalTimer, setTotalTimer] = useState(0)
+  const [currentRiderNumber, setCurrentRiderNumber] = useState(1)
+  const [timerData, setTimerData] = useState<any>(null)
 
   useEffect(() => {
     if (orderId) {
@@ -56,6 +71,84 @@ export default function OrderTrackingPage() {
       fetchOrderDetails()
     }
   }, [orderId])
+
+  // Fetch timer data from server
+  const fetchTimerData = async () => {
+    if (!orderId) return
+    
+    try {
+      const response = await fetch(`/api/orders/timer?order_id=${orderId}`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setTimerData(data)
+        
+        // Check if order status changed (e.g., cancelled)
+        if (data.status && data.status !== 'assigned') {
+          console.log('Order status changed to:', data.status)
+          // Refresh order details to get updated status
+          await fetchOrderDetails()
+          return
+        }
+        
+        if (data.hasTimer) {
+          setTimer(data.currentRider.timeRemaining)
+          setTotalTimer(data.totalTimeRemaining)
+          setCurrentRiderNumber(data.currentRider.number)
+          
+          // If timer needs progression, trigger it
+          if (data.needsProgression) {
+            await progressToNextRider()
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching timer data:', error)
+    }
+  }
+
+  // Progress to next rider when current one expires
+  const progressToNextRider = async () => {
+    try {
+      const response = await fetch('/api/orders/progress-offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId })
+      })
+      
+      const data = await response.json()
+      if (response.ok) {
+        console.log('Progressed to next rider:', data.message)
+        // Refresh order details and timer
+        await fetchOrderDetails()
+        await fetchTimerData()
+      }
+    } catch (error) {
+      console.error('Error progressing to next rider:', error)
+    }
+  }
+
+  // Timer polling for waiting status
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+    
+    if (order && order.status === 'assigned') {
+      // Fetch timer data immediately
+      fetchTimerData()
+      
+      // Then poll every 3 seconds for faster updates when riders decline
+      interval = setInterval(() => {
+        fetchTimerData()
+      }, 3000)
+    } else if (order && order.status === 'cancelled') {
+      // Clear any existing timers when order is cancelled
+      console.log('Order cancelled, stopping timer polling')
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [order, orderId])
 
   useEffect(() => {
     if (order && order.status === 'accepted') {
@@ -337,11 +430,11 @@ export default function OrderTrackingPage() {
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'pending':
-        return { text: 'Finding Driver', color: 'bg-yellow-100 text-yellow-800', icon: '🔍' }
+        return { text: 'Finding Riders', color: 'bg-yellow-100 text-yellow-800', icon: '🔍' }
       case 'assigned':
-        return { text: 'Driver Assigned', color: 'bg-blue-100 text-blue-800', icon: '👤' }
+        return { text: 'Waiting for Rider to Accept', color: 'bg-blue-100 text-blue-800', icon: '⏳' }
       case 'accepted':
-        return { text: 'Driver On The Way', color: 'bg-green-100 text-green-800', icon: '🚗' }
+        return { text: 'Rider On The Way', color: 'bg-green-100 text-green-800', icon: '🚗' }
       case 'delivered':
         return { text: 'Delivered', color: 'bg-green-100 text-green-800', icon: '✅' }
       case 'cancelled':
@@ -422,6 +515,115 @@ export default function OrderTrackingPage() {
 
           {/* Order Details - Takes 1 column */}
           <div className="space-y-6">
+            {/* Cancelled Order Section */}
+            {order.status === 'cancelled' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Order Cancelled
+                </h3>
+                <div className="text-center py-6">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">No Riders Available</h4>
+                  <p className="text-gray-600 mb-4">
+                    Unfortunately, no riders were available to accept your order within the 30-minute window.
+                  </p>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-800">
+                      <strong>What you can do:</strong> Try creating a new order or check back later when more riders might be available.
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <button 
+                      onClick={() => window.location.href = '/orders'}
+                      className="bg-[#133bb7] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#0f2a8a] transition-colors"
+                    >
+                      Create New Order
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Waiting for Rider Section */}
+            {order.status === 'assigned' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Waiting for Rider
+                </h3>
+                <div className="text-center py-6">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Finding a Rider</h4>
+                  <p className="text-gray-600 mb-2">
+                    We're looking for riders in your area. This may take up to 30 minutes.
+                  </p>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-blue-800 mb-2">
+                      <strong>Rider {currentRiderNumber}:</strong> {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')} remaining
+                    </p>
+                    <p className="text-sm text-blue-800">
+                      <strong>Total time:</strong> {Math.floor(totalTimer / 60)}:{(totalTimer % 60).toString().padStart(2, '0')} remaining
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-xs text-gray-600">
+                      <strong>Please wait:</strong> We'll notify you as soon as a rider accepts your order.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pricing Information */}
+            {order.pricing && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 1V23M17 5H9.5C8.11929 5 7 6.11929 7 7.5S8.11929 10 9.5 10H14.5C15.8807 10 17 11.1193 17 12.5S15.8807 15 14.5 15H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Order Pricing
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Distance</span>
+                    <span className="font-medium">{order.pricing.distance} km</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Base Fare</span>
+                    <span className="font-medium">₹{order.pricing.breakdown.baseFare}</span>
+                  </div>
+                  {order.pricing.breakdown.distanceFare > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Distance Fare</span>
+                      <span className="font-medium">₹{order.pricing.breakdown.distanceFare}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-3">
+                    <div className="flex justify-between items-center text-lg font-semibold">
+                      <span>Total Amount</span>
+                      <span className="text-[#133bb7]">₹{order.pricing.totalPrice}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      This is the amount you'll pay to the rider (COD)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* OTPs Section */}
             {order.status === 'accepted' && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

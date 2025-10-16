@@ -28,7 +28,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <Navbar />
-          <main className="min-h-screen bg-[#fafafa] pb-16 md:pb-0">{children}</main>
+          <main className="min-h-screen pb-16 md:pb-0">{children}</main>
           <MobileBottomNav />
         </AuthProvider>
       </body>
