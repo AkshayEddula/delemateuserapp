@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import MobileBottomNav from "@/components/MobileBottomNav";
+import FirstTimeUserWrapper from "@/components/FirstTimeUserWrapper";
 
 const lexend = Lexend({
   variable: "--font-lexend",
@@ -27,9 +28,11 @@ export default function RootLayout({
         className={`${lexend.variable} antialiased`}
       >
         <AuthProvider>
-          <Navbar />
-          <main className="min-h-screen pb-16 md:pb-0">{children}</main>
-          <MobileBottomNav />
+          <FirstTimeUserWrapper>
+            <Navbar />
+            <main className="min-h-screen pb-16 md:pb-0">{children}</main>
+            <MobileBottomNav />
+          </FirstTimeUserWrapper>
         </AuthProvider>
       </body>
     </html>

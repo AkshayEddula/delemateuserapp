@@ -241,6 +241,23 @@ export async function GET(request: NextRequest) {
     }
     const totalTimeElapsed = Math.floor((now.getTime() - orderCreatedAt.getTime()) / 1000) // seconds
     const totalTimeRemaining = Math.max(0, 1800 - totalTimeElapsed) // 30 minutes = 1800 seconds
+    
+    // Check if total time has expired (30 minutes)
+    if (totalTimeRemaining <= 0) {
+      console.log(`Order ${orderId}: Total time expired (30 minutes), cancelling order`)
+      
+      // Cancel the order
+      await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+      
+      return NextResponse.json({
+        hasTimer: false,
+        status: 'cancelled',
+        message: 'Order cancelled - no riders accepted within 30 minutes'
+      })
+    }
 
     // Calculate current rider timer
     let currentRiderTimeRemaining = 0
@@ -257,22 +274,41 @@ export async function GET(request: NextRequest) {
 
     // Check if we need to move to next rider
     if (currentRiderTimeRemaining <= 0 && totalTimeRemaining > 0) {
-      // This should trigger the offer progression logic
-      // For now, we'll return the next rider info
-      const nextRiderNumber = currentRiderNumber + 1
-      const nextRiderTimeRemaining = Math.min(120, totalTimeRemaining) // 2 minutes or remaining time
+      console.log(`Order ${orderId}: Rider ${currentRiderNumber} time expired, moving to next rider`)
       
-      return NextResponse.json({
-        hasTimer: true,
-        status: 'assigned',
-        currentRider: {
-          number: nextRiderNumber,
-          timeRemaining: nextRiderTimeRemaining
-        },
-        totalTimeRemaining,
-        needsProgression: true,
-        message: `Rider ${currentRiderNumber} time expired, moving to rider ${nextRiderNumber}`
-      })
+      // Mark current offer as declined due to timeout
+      if (currentOffer) {
+        await supabase
+          .from('order_offers')
+          .update({ status: 'declined' })
+          .eq('id', currentOffer.id)
+        console.log(`Order ${orderId}: Marked current offer as declined due to timeout`)
+      }
+      
+      // Actually move to the next rider
+      const progressionResult = await moveToNextRider(orderId, order)
+      
+      if (progressionResult.success) {
+        const nextRiderNumber = currentRiderNumber + 1
+        const nextRiderTimeRemaining = Math.min(120, totalTimeRemaining) // 2 minutes or remaining time
+        
+        return NextResponse.json({
+          hasTimer: true,
+          status: 'assigned',
+          currentRider: {
+            number: nextRiderNumber,
+            timeRemaining: nextRiderTimeRemaining
+          },
+          totalTimeRemaining,
+          message: progressionResult.message || `Moved to rider ${nextRiderNumber}`
+        })
+      } else {
+        return NextResponse.json({
+          hasTimer: false,
+          status: progressionResult.order_status || 'cancelled',
+          message: progressionResult.message || 'No more riders available'
+        })
+      }
     }
 
     return NextResponse.json({

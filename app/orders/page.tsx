@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext'
 import LocationAutocomplete from '@/components/LocationAutocomplete'
 import GoogleMapsScript from '@/components/GoogleMapsScript'
 import OrderLoading from '@/components/OrderLoading'
+import { calculateDistance, calculateOrderPrice } from '@/lib/pricing'
 
 type PackageDetails = {
   receiverName: string
@@ -13,7 +14,6 @@ type PackageDetails = {
   category: string
   weight: string
   estimatedValue: string
-  description: string
 }
 
 export default function CreateOrderPage() {
@@ -22,14 +22,15 @@ export default function CreateOrderPage() {
   const [drop, setDrop] = useState('')
   const [pickupLocation, setPickupLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
   const [dropLocation, setDropLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
+  const [locationLoading, setLocationLoading] = useState(false)
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false)
   const [packageDetails, setPackageDetails] = useState<PackageDetails>({
     receiverName: '',
     receiverPhone: '',
     category: '',
     weight: '',
-    estimatedValue: '',
-    description: ''
+    estimatedValue: ''
   })
 
   const [status, setStatus] = useState<'idle'|'checking'|'waiting'|'cancelled'|'success'>('idle')
@@ -38,10 +39,15 @@ export default function CreateOrderPage() {
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null)
   const [orderHistory, setOrderHistory] = useState<any[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'all'|'accepted'|'delivered'|'cancelled'>('all')
+  const [activeTab, setActiveTab] = useState<'all'|'pending'|'accepted'|'delivered'|'cancelled'>('all')
   const [currentStep, setCurrentStep] = useState<'location'|'package'|'confirm'>('location')
   const [errors, setErrors] = useState<{[key: string]: string}>({})
   const [showModal, setShowModal] = useState(false)
+  const [orderPricing, setOrderPricing] = useState<{
+    distance: number
+    totalPrice: number
+    breakdown: any
+  } | null>(null)
 
   // countdown for driver acceptance
   useEffect(() => {
@@ -83,6 +89,79 @@ export default function CreateOrderPage() {
       fetchOrderHistory()
     }
   }, [user?.id])
+
+  // Calculate pricing when locations are available
+  const calculatePricing = () => {
+    if (pickupLocation && dropLocation) {
+      const distance = calculateDistance(
+        pickupLocation.lat, 
+        pickupLocation.lng, 
+        dropLocation.lat, 
+        dropLocation.lng
+      )
+      const pricing = calculateOrderPrice(distance)
+      
+      setOrderPricing({
+        distance: Math.round(distance * 100) / 100,
+        totalPrice: pricing.totalPrice,
+        breakdown: pricing.breakdown
+      })
+    } else {
+      setOrderPricing(null)
+    }
+  }
+
+  // Calculate pricing when locations change
+  useEffect(() => {
+    calculatePricing()
+  }, [pickupLocation, dropLocation])
+
+  // Auto-detect user location
+  const detectUserLocation = async () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by this browser')
+      return
+    }
+
+    setLocationLoading(true)
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        
+        try {
+          // Use Google Geocoding API to get address
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+          )
+          const data = await response.json()
+          
+          if (data.results && data.results.length > 0) {
+            const address = data.results[0].formatted_address
+            const location = { lat: latitude, lng: longitude, address }
+            
+            setUserLocation(location)
+            setPickupLocation(location)
+            setPickup(address)
+          }
+        } catch (error) {
+          console.error('Error getting address:', error)
+          // Fallback to coordinates only
+          const location = { lat: latitude, lng: longitude, address: `${latitude}, ${longitude}` }
+          setUserLocation(location)
+          setPickupLocation(location)
+          setPickup(`${latitude}, ${longitude}`)
+        }
+        
+        setLocationLoading(false)
+      },
+      (error) => {
+        console.error('Error getting location:', error)
+        setLocationLoading(false)
+        alert('Unable to get your location. Please enter manually.')
+      }
+    )
+  }
 
   const handlePackageChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     let value = e.target.value
@@ -197,6 +276,7 @@ export default function CreateOrderPage() {
     try {
       const response = await fetch(`/api/orders/history?user_id=${user.id}`)
       const data = await response.json()
+      console.log('Fetched orders:', data.orders)
       setOrderHistory(data.orders || [])
     } catch (error) {
       console.error('Error fetching order history:', error)
@@ -207,6 +287,7 @@ export default function CreateOrderPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'assigned': return 'bg-orange-100 text-orange-800'
       case 'accepted': return 'bg-blue-100 text-blue-800'
       case 'delivered': return 'bg-green-100 text-green-800'
       case 'cancelled': return 'bg-red-100 text-red-800'
@@ -216,6 +297,7 @@ export default function CreateOrderPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'assigned': return '🔍'
       case 'accepted': return '✅'
       case 'delivered': return '📦'
       case 'cancelled': return '❌'
@@ -226,8 +308,19 @@ export default function CreateOrderPage() {
   const getFilteredOrders = () => {
     // Skip the first order (recent order) and get the rest
     const previousOrders = orderHistory.slice(1)
+    console.log('All orders:', orderHistory)
+    console.log('Previous orders:', previousOrders)
+    console.log('Active tab:', activeTab)
+    
     if (activeTab === 'all') return previousOrders
-    return previousOrders.filter(order => order.status === activeTab)
+    if (activeTab === 'pending') {
+      const assignedOrders = previousOrders.filter(order => order.status === 'assigned')
+      console.log('Assigned orders:', assignedOrders)
+      return assignedOrders
+    }
+    const filtered = previousOrders.filter(order => order.status === activeTab)
+    console.log(`Filtered ${activeTab} orders:`, filtered)
+    return filtered
   }
 
   const resetForm = () => {
@@ -240,8 +333,7 @@ export default function CreateOrderPage() {
       receiverPhone: '',
       category: '',
       weight: '',
-      estimatedValue: '',
-      description: ''
+      estimatedValue: ''
     })
     setCurrentStep('location')
     setErrors({})
@@ -363,7 +455,31 @@ export default function CreateOrderPage() {
               <div className="space-y-4">
             {/* Pickup Location */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Pickup Location</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Pickup Location</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={detectUserLocation}
+                        disabled={locationLoading}
+                        className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                      >
+                        {locationLoading ? '📍 Detecting...' : '📍 Use My Location'}
+                      </button>
+                      {userLocation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPickup('')
+                            setPickupLocation(null)
+                          }}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
             {isGoogleMapsLoaded ? (
               <LocationAutocomplete
                 placeholder="Enter pickup location"
@@ -377,18 +493,18 @@ export default function CreateOrderPage() {
               />
             ) : (
               <div className="relative">
-                <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 </div>
                 <input
                   type="text"
                   placeholder="Loading location services..."
                   disabled
-                        className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 text-sm"
                 />
               </div>
             )}
-                  {errors.pickup && <p className="text-red-500 text-sm mt-1">{errors.pickup}</p>}
+                  {errors.pickup && <p className="text-red-500 text-xs mt-1">{errors.pickup}</p>}
                   {!pickupLocation && pickup && (
                     <p className="text-amber-600 text-xs mt-1">💡 Please select from the dropdown suggestions to get accurate coordinates</p>
                   )}
@@ -410,23 +526,39 @@ export default function CreateOrderPage() {
               />
             ) : (
               <div className="relative">
-                <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                 </div>
                 <input
                   type="text"
                   placeholder="Loading location services..."
                   disabled
-                        className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 text-sm"
                 />
               </div>
             )}
-                  {errors.drop && <p className="text-red-500 text-sm mt-1">{errors.drop}</p>}
+                  {errors.drop && <p className="text-red-500 text-xs mt-1">{errors.drop}</p>}
                   {!dropLocation && drop && (
                     <p className="text-amber-600 text-xs mt-1">💡 Please select from the dropdown suggestions to get accurate coordinates</p>
                   )}
-          </div>
+                </div>
         </div>
+
+        {/* Pricing Preview */}
+        {orderPricing && (
+          <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-green-600">💰</span>
+                <span className="text-sm text-gray-700">
+                  <strong>{orderPricing.distance} km</strong> - 
+                  <span className="text-green-600 font-semibold ml-1">₹{orderPricing.totalPrice}</span>
+                </span>
+              </div>
+              <span className="text-xs text-gray-500">Estimated price</span>
+            </div>
+          </div>
+        )}
 
               <div className="flex justify-end mt-6">
                 <button
@@ -540,21 +672,6 @@ export default function CreateOrderPage() {
                   {errors.estimatedValue && <p className="text-red-500 text-sm mt-1">{errors.estimatedValue}</p>}
             </div>
                 
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea
-                name="description"
-                placeholder="Describe your package (optional)..."
-                value={packageDetails.description}
-                onChange={handlePackageChange}
-                rows={4}
-                maxLength={200}
-                className="w-full px-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 resize-none text-sm hover:border-gray-300"
-              />
-              <div className="text-right text-xs text-gray-400 mt-1">
-                {packageDetails.description.length}/200 characters
-              </div>
-                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-between mt-6">
@@ -617,12 +734,40 @@ export default function CreateOrderPage() {
                       <span className="text-gray-500">💰</span>
                       <span className="text-gray-800"><strong>Value:</strong> ₹{packageDetails.estimatedValue}</span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-gray-500 mt-1">📝</span>
-                      <span className="text-gray-800"><strong>Description:</strong> {packageDetails.description || 'None'}</span>
-                    </div>
             </div>
           </div>
+
+          {/* Pricing Section */}
+          {orderPricing && (
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                <span>💳</span>
+                <span>Pricing</span>
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Distance:</span>
+                  <span className="text-gray-800 font-medium">{orderPricing.distance} km</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Base fare (0-2km):</span>
+                  <span className="text-gray-800">₹{orderPricing.breakdown.baseFare}</span>
+                </div>
+                {orderPricing.breakdown.distanceFare > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Distance fare:</span>
+                    <span className="text-gray-800">₹{orderPricing.breakdown.distanceFare}</span>
+                  </div>
+                )}
+                <div className="border-t border-blue-200 pt-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-800 font-semibold">Total Price:</span>
+                    <span className="text-blue-600 font-bold text-lg">₹{orderPricing.totalPrice}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-between mt-6">
@@ -817,6 +962,16 @@ export default function CreateOrderPage() {
                     All ({orderHistory.length > 1 ? orderHistory.length - 1 : 0})
                   </button>
                   <button
+                    onClick={() => setActiveTab('pending')}
+                    className={`px-3 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-colors ${
+                      activeTab === 'pending' 
+                        ? 'bg-[#133bb7] text-white' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Pending ({orderHistory.slice(1).filter(o => o.status === 'assigned').length})
+                  </button>
+                  <button
                     onClick={() => setActiveTab('accepted')}
                     className={`px-3 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-colors ${
                       activeTab === 'accepted' 
@@ -865,6 +1020,14 @@ export default function CreateOrderPage() {
                   <p className="text-gray-600 text-sm">
                     {activeTab === 'all' 
                       ? "You haven't placed any orders yet." 
+                      : activeTab === 'pending'
+                      ? "No orders being processed. All your orders have been completed or cancelled."
+                      : activeTab === 'accepted'
+                      ? "No accepted orders. Your orders are either pending or completed."
+                      : activeTab === 'delivered'
+                      ? "No delivered orders yet. Your orders are still in progress."
+                      : activeTab === 'cancelled'
+                      ? "No cancelled orders. Great! All your orders have been successful."
                       : `No ${activeTab} orders found.`
                     }
                   </p>
@@ -875,10 +1038,10 @@ export default function CreateOrderPage() {
                     <div 
                       key={order.id} 
                       className={`bg-white border border-gray-200 rounded-lg p-3 hover:shadow-sm transition-all ${
-                        (order.status === 'accepted' || order.status === 'delivered') ? 'cursor-pointer hover:border-[#133bb7]' : ''
+                        (order.status === 'assigned' || order.status === 'accepted' || order.status === 'delivered') ? 'cursor-pointer hover:border-[#133bb7]' : ''
                       }`}
                       onClick={() => {
-                        if (order.status === 'accepted' || order.status === 'delivered') {
+                        if (order.status === 'assigned' || order.status === 'accepted' || order.status === 'delivered') {
                           window.location.href = `/orders/track/${order.id}`
                         }
                       }}
@@ -888,7 +1051,8 @@ export default function CreateOrderPage() {
                           <div className={`w-3 h-3 rounded-full ${getStatusColor(order.status)}`}></div>
                           <span className="font-medium text-gray-800 text-sm">Order #{order.id.slice(-8)}</span>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)} bg-opacity-10`}>
-                            {getStatusIcon(order.status)} {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                            {getStatusIcon(order.status)} {order.status === 'assigned' ? 'Finding riders' :
+                             order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                           </span>
                         </div>
                         <div className="text-xs text-gray-500">

@@ -122,8 +122,8 @@ export default function LocationAutocomplete({
   return (
     <div className="relative">
       <div className="relative">
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-          <div className={`w-3 h-3 rounded-full ${icon === 'pickup' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+        <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+          <div className={`w-2 h-2 rounded-full ${icon === 'pickup' ? 'bg-green-500' : 'bg-red-500'}`}></div>
         </div>
         <input
           ref={inputRef}
@@ -133,7 +133,7 @@ export default function LocationAutocomplete({
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500"
+          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-sm"
         />
         {isLoading && (
           <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -143,12 +143,12 @@ export default function LocationAutocomplete({
       </div>
 
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {suggestions.map((suggestion, index) => (
             <button
               key={suggestion.place_id}
               onClick={() => handleSuggestionClick(suggestion)}
-              className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+              className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors text-sm"
             >
               <div className="flex items-start gap-3">
                 <div className="mt-1">

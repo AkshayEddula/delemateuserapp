@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import { User as SupabaseUser } from '@supabase/supabase-js'
 
 type User = {
   id: string
@@ -15,7 +16,7 @@ type User = {
 type AuthContextType = {
   user: User | null
   loading: boolean
-  login: (phone: string, otp: string) => Promise<void>
+  login: (phone: string, otp: string) => Promise<boolean>
   requestOtp: (phone: string) => void
   logout: () => void
 }
@@ -25,83 +26,141 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [otpStore, setOtpStore] = useState<{ [key: string]: string }>({}) // simulate OTP
 
   useEffect(() => {
-    // On mount, check session in localStorage
-    const savedUser = localStorage.getItem('user')
-    if (savedUser) setUser(JSON.parse(savedUser))
-    setLoading(false)
+    // Check for existing session token
+    const checkSession = () => {
+      try {
+        const sessionToken = localStorage.getItem('sessionToken')
+        const savedUser = localStorage.getItem('user')
+        
+        if (sessionToken && savedUser) {
+          // Verify session token is still valid
+          const tokenData = JSON.parse(atob(sessionToken))
+          const now = Math.floor(Date.now() / 1000)
+          
+          if (tokenData.exp > now) {
+            // Session is still valid
+            console.log('Valid session found, setting user:', JSON.parse(savedUser))
+            setUser(JSON.parse(savedUser))
+          } else {
+            // Session expired, clear storage
+            console.log('Session expired, clearing storage')
+            localStorage.removeItem('sessionToken')
+            localStorage.removeItem('user')
+          }
+        }
+      } catch (error) {
+        console.error('Session check error:', error)
+        // Clear invalid session data
+        localStorage.removeItem('sessionToken')
+        localStorage.removeItem('user')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkSession()
   }, [])
 
-  // Simulate sending OTP
-  const requestOtp = (phone: string) => {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString()
-    alert(`Simulated OTP for ${phone}: ${otp}`)
-    setOtpStore(prev => ({ ...prev, [phone]: otp }))
+  // Send real OTP
+  const requestOtp = async (phone: string) => {
+    try {
+      const response = await fetch('https://delemate-api.onrender.com/api/auth/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: phone
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        alert(errorData.message || 'Failed to send OTP')
+        return false
+      }
+
+      const data = await response.json()
+      alert(data.message || 'OTP sent successfully')
+      return true
+    } catch (error) {
+      console.error('OTP request error:', error)
+      alert('Failed to send OTP. Please try again.')
+      return false
+    }
   }
 
   const login = async (phone: string, otp: string) => {
     setLoading(true)
-    const validOtp = otpStore[phone]
-    if (validOtp !== otp) {
-      alert('Invalid OTP')
-      setLoading(false)
-      return false
-    }
-
-    // Fetch existing user
-    let { data: existing, error } = await supabase
-      .from('users')
-      .select('id, name, phone, role, lat, lng')
-      .eq('phone', phone)
-      .single()
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Supabase select error:', error)
-      setLoading(false)
-      return false
-    }
-
-    let lat = 0, lng = 0
+    
     try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject)
-      )
-      lat = pos.coords.latitude
-      lng = pos.coords.longitude
-    } catch {
-      console.warn('Location permission denied')
-    }
+      // First verify OTP with your API
+      const otpResponse = await fetch('https://delemate-api.onrender.com/api/auth/verify-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: phone,
+          otp: otp,
+        }),
+      });
 
-    // Insert user if not exists
-    if (!existing) {
-      const { data, error: insertError } = await supabase
-        .from('users')
-        .insert([{ phone, role: 'user', lat, lng }])
-        .select('id, name, phone, role, lat, lng')
-        .single()
-
-      if (insertError) {
-        console.error('Supabase insert error:', insertError)
-        alert('Signup failed: ' + insertError.message)
+      if (!otpResponse.ok) {
+        const errorData = await otpResponse.json()
+        alert(errorData.message || 'Invalid OTP')
         setLoading(false)
         return false
       }
 
-      existing = data
-    }
+      // OTP verified, now create session with our API
+      const sessionResponse = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone }),
+      })
 
-    const loggedUser = { ...existing }
-    setUser(loggedUser)
-    localStorage.setItem('user', JSON.stringify(loggedUser))
-    setLoading(false)
-    return true
+      if (!sessionResponse.ok) {
+        const errorData = await sessionResponse.json()
+        alert(errorData.error || 'Session creation failed')
+        setLoading(false)
+        return false
+      }
+
+      const { user: userData, sessionToken, isFirstTime } = await sessionResponse.json()
+
+      // Store session token and user data
+      if (sessionToken) {
+        localStorage.setItem('sessionToken', sessionToken)
+        localStorage.setItem('user', JSON.stringify(userData))
+        localStorage.setItem('isFirstTime', isFirstTime.toString())
+        setUser(userData)
+        setLoading(false)
+        return true
+      } else {
+        alert('Session creation failed')
+        setLoading(false)
+        return false
+      }
+    } catch (error) {
+      console.error('Login error:', error)
+      alert('Login failed. Please try again.')
+      setLoading(false)
+      return false
+    }
   }
 
   const logout = () => {
-    setUser(null)
+    // Clear session and user data
+    localStorage.removeItem('sessionToken')
     localStorage.removeItem('user')
+    setUser(null)
   }
 
   return (

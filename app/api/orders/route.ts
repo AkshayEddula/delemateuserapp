@@ -94,6 +94,15 @@ function isRiderOnRoute(riderLat: number, riderLng: number, pickupLat: number, p
   return distanceToPickup <= 5 && riderTotalDistance <= maxDetourDistance
 }
 
+// Helper function to add timeout to operations
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+  })
+  
+  return Promise.race([promise, timeoutPromise])
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -103,51 +112,69 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
+    console.log('Creating order for user:', user_id)
+
     // Calculate distance and pricing
     const distance = calculateDistance(pickup_lat, pickup_lng, drop_lat, drop_lng)
     const pricing = calculateOrderPrice(distance)
 
     // First, create the order with pricing information
-    const { data: order, error } = await supabase
-      .from('orders')
-      .insert([{
-        user_id,
-        pickup_lat,
-        pickup_lng,
-        drop_lat,
-        drop_lng,
-        distance_km: Math.round(distance * 100) / 100, // Round to 2 decimal places
-        total_price: pricing.totalPrice,
-        commission: pricing.commission,
-        rider_earnings: pricing.riderEarnings,
-        package_details: {
-          ...package_details,
-          distance: Math.round(distance * 100) / 100, // Keep in package_details for backward compatibility
+    console.log('Creating order in database...')
+    const { data: order, error } = await withTimeout(
+      supabase
+        .from('orders')
+        .insert([{
+          user_id,
+          pickup_lat,
+          pickup_lng,
+          drop_lat,
+          drop_lng,
+          distance_km: Math.round(distance * 100) / 100, // Round to 2 decimal places
           total_price: pricing.totalPrice,
           commission: pricing.commission,
-          rider_earnings: pricing.riderEarnings
-        },
-        status
-      }])
-      .select()
-      .single()
+          rider_earnings: pricing.riderEarnings,
+          package_details: {
+            ...package_details,
+            distance: Math.round(distance * 100) / 100, // Keep in package_details for backward compatibility
+            total_price: pricing.totalPrice,
+            commission: pricing.commission,
+            rider_earnings: pricing.riderEarnings
+          },
+          status
+        }])
+        .select()
+        .single(),
+      10000, // 10 second timeout
+      'Creating order'
+    )
 
     if (error) {
-      console.error('API Error creating order:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('Database error creating order:', error)
+      return NextResponse.json({ 
+        error: 'Failed to create order in database', 
+        details: error.message,
+        isTimeout: error.message.includes('timed out')
+      }, { status: 500 })
     }
 
+    console.log('Order created successfully:', order.id)
+
     // Find available riders near pickup location
-    const { data: riders, error: ridersError } = await supabase
-      .from('users')
-      .select('id, lat, lng, name, phone')
-      .eq('role', 'rider')
-      .eq('is_online', true)
-      .not('lat', 'is', null)
-      .not('lng', 'is', null)
+    console.log('Fetching available riders...')
+    const { data: riders, error: ridersError } = await withTimeout(
+      supabase
+        .from('users')
+        .select('id, lat, lng, name, phone')
+        .eq('role', 'rider')
+        .eq('is_online', true)
+        .not('lat', 'is', null)
+        .not('lng', 'is', null),
+      8000, // 8 second timeout
+      'Fetching riders'
+    )
 
     if (ridersError) {
-      console.error('Error fetching riders:', ridersError)
+      console.error('Database error fetching riders:', ridersError)
       // Update order status to failed
       await supabase
         .from('orders')
@@ -155,9 +182,13 @@ export async function POST(request: NextRequest) {
         .eq('id', order.id)
       return NextResponse.json({ 
         order: { ...order, status: 'cancelled' }, 
-        status: 'cancelled' 
+        status: 'cancelled',
+        error: 'Failed to fetch riders from database',
+        isTimeout: ridersError.message.includes('timed out')
       })
     }
+
+    console.log(`Found ${riders?.length || 0} available riders`)
 
     if (!riders || riders.length === 0) {
       // No riders available

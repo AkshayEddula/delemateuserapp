@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         driver:users!orders_driver_id_fkey(name, phone)
       `)
       .eq('user_id', user_id)
-      .in('status', ['cancelled', 'accepted', 'delivered'])
+      .in('status', ['assigned', 'cancelled', 'accepted', 'delivered'])
       .order('created_at', { ascending: false })
 
     // Optional status filter
