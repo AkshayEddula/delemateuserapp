@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (validOtp !== otp) {
       alert('Invalid OTP')
       setLoading(false)
-      return
+      return false
     }
 
     // Fetch existing user
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (error && error.code !== 'PGRST116') {
       console.error('Supabase select error:', error)
       setLoading(false)
-      return
+      return false
     }
 
     let lat = 0, lng = 0
@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('Supabase insert error:', insertError)
         alert('Signup failed: ' + insertError.message)
         setLoading(false)
-        return
+        return false
       }
 
       existing = data
@@ -96,6 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(loggedUser)
     localStorage.setItem('user', JSON.stringify(loggedUser))
     setLoading(false)
+    return true
   }
 
   const logout = () => {

@@ -9,10 +9,18 @@ import GoogleMapsScript from '@/components/GoogleMapsScript'
 type Order = {
   id: string
   status: string
-  pickup_lat: number
-  pickup_lng: number
-  drop_lat: number
-  drop_lng: number
+  pickup_lat?: number
+  pickup_lng?: number
+  drop_lat?: number
+  drop_lng?: number
+  pickup?: {
+    lat: number
+    lng: number
+  }
+  drop?: {
+    lat: number
+    lng: number
+  }
   package_details: any
   driver_id: string
   created_at: string
@@ -163,10 +171,10 @@ export default function OrderTrackingPage() {
 
   useEffect(() => {
     if (isGoogleMapsLoaded && order) {
-      // Add a small delay to ensure Google Maps is fully loaded
+      // Add a longer delay to ensure Google Maps is fully loaded
       setTimeout(() => {
         initializeMap()
-      }, 100)
+      }, 1000)
     }
   }, [isGoogleMapsLoaded, order])
 
@@ -284,15 +292,50 @@ export default function OrderTrackingPage() {
   }
 
   const initializeMap = () => {
-    if (!order || !window.google) return
+    if (!order || !window.google) {
+      console.log('Map initialization skipped - order or google not available:', { order: !!order, google: !!window.google })
+      return
+    }
 
     const mapElement = document.getElementById('map')
-    if (!mapElement) return
+    if (!mapElement) {
+      console.log('Map element not found')
+      return
+    }
+
+    console.log('Initializing map with order:', order)
+
+    // Validate coordinates - handle both nested and flat structure
+    const pickupLat = parseFloat(order.pickup?.lat || order.pickup_lat)
+    const pickupLng = parseFloat(order.pickup?.lng || order.pickup_lng)
+    const dropLat = parseFloat(order.drop?.lat || order.drop_lat)
+    const dropLng = parseFloat(order.drop?.lng || order.drop_lng)
+
+    console.log('Order data structure:', order)
+    console.log('Coordinates:', { pickupLat, pickupLng, dropLat, dropLng })
+
+    // Check if coordinates are valid numbers
+    if (isNaN(pickupLat) || isNaN(pickupLng) || isNaN(dropLat) || isNaN(dropLng)) {
+      console.error('Invalid coordinates:', { pickupLat, pickupLng, dropLat, dropLng })
+      console.error('Raw order data:', {
+        pickup: order.pickup,
+        drop: order.drop,
+        pickup_lat: order.pickup_lat,
+        pickup_lng: order.pickup_lng,
+        drop_lat: order.drop_lat,
+        drop_lng: order.drop_lng
+      })
+      return
+    }
+
+    // Use Mumbai as fallback center if coordinates are invalid
+    const centerLat = isNaN(pickupLat) ? 19.0760 : pickupLat
+    const centerLng = isNaN(pickupLng) ? 72.8777 : pickupLng
 
     try {
       const mapInstance = new google.maps.Map(mapElement, {
         zoom: 13,
-        center: { lat: order.pickup_lat, lng: order.pickup_lng },
+        center: { lat: centerLat, lng: centerLng },
         mapTypeId: google.maps.MapTypeId.ROADMAP,
         styles: [
           {
@@ -307,7 +350,7 @@ export default function OrderTrackingPage() {
 
       // Add pickup marker
       const pickup = new google.maps.Marker({
-        position: { lat: order.pickup_lat, lng: order.pickup_lng },
+        position: { lat: pickupLat, lng: pickupLng },
         map: mapInstance,
         title: 'Pickup Location',
         icon: {
@@ -324,7 +367,7 @@ export default function OrderTrackingPage() {
 
       // Add drop marker
       const drop = new google.maps.Marker({
-        position: { lat: order.drop_lat, lng: order.drop_lng },
+        position: { lat: dropLat, lng: dropLng },
         map: mapInstance,
         title: 'Delivery Location',
         icon: {
@@ -342,8 +385,8 @@ export default function OrderTrackingPage() {
       // Add a simple line between pickup and drop as fallback
       const fallbackLine = new google.maps.Polyline({
         path: [
-          { lat: order.pickup_lat, lng: order.pickup_lng },
-          { lat: order.drop_lat, lng: order.drop_lng }
+          { lat: pickupLat, lng: pickupLng },
+          { lat: dropLat, lng: dropLng }
         ],
         geodesic: true,
         strokeColor: '#3B82F6',
@@ -369,8 +412,8 @@ export default function OrderTrackingPage() {
           directionsRenderer.setMap(mapInstance)
 
           const request = {
-            origin: { lat: order.pickup_lat, lng: order.pickup_lng },
-            destination: { lat: order.drop_lat, lng: order.drop_lng },
+            origin: { lat: pickupLat, lng: pickupLng },
+            destination: { lat: dropLat, lng: dropLng },
             travelMode: google.maps.TravelMode.DRIVING
           }
 
@@ -469,19 +512,19 @@ export default function OrderTrackingPage() {
   const statusInfo = getStatusInfo(order.status)
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-screen bg-gray-50">
       <GoogleMapsScript onLoad={() => setIsGoogleMapsLoaded(true)} />
       
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-6xl mx-auto px-6 py-6">
+        <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Order Tracking</h1>
-              <p className="text-gray-600 mt-1">Order #{order.id.slice(-8)}</p>
+              <h1 className="text-xl font-semibold text-gray-800">Order Tracking</h1>
+              <p className="text-gray-600 text-sm mt-1">Order #{order.id.slice(-8)}</p>
             </div>
             <div className="flex items-center gap-3">
-              <span className={`px-4 py-2 rounded-full text-sm font-semibold ${statusInfo.color}`}>
+              <span className={`px-3 py-1.5 rounded-lg text-xs font-medium ${statusInfo.color}`}>
                 {statusInfo.icon} {statusInfo.text}
               </span>
             </div>
@@ -489,60 +532,68 @@ export default function OrderTrackingPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Map - Takes 2 columns */}
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Live Tracking</h2>
+          <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-800">Live Tracking</h2>
               {driverLocation && (
-                <div className="text-sm text-gray-500">
+                <div className="text-xs text-gray-500">
                   Last updated: {new Date(driverLocation.created_at).toLocaleTimeString()}
                 </div>
               )}
             </div>
             {isGoogleMapsLoaded ? (
-              <div id="map" className="w-full h-[400px] md:h-[500px] rounded-xl bg-gray-100"></div>
+              <div id="map" className="w-full h-[350px] md:h-[400px] rounded-lg bg-gray-100"></div>
             ) : (
-              <div className="w-full h-[400px] md:h-[500px] rounded-xl bg-gray-100 flex items-center justify-center">
+              <div className="w-full h-[350px] md:h-[400px] rounded-lg bg-gray-100 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="w-8 h-8 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading map...</p>
+                  <div className="w-6 h-6 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-gray-600 text-sm">Loading map...</p>
                 </div>
+              </div>
+            )}
+            {/* Show error message if coordinates are invalid */}
+            {order && (isNaN(parseFloat(order.pickup?.lat || order.pickup_lat)) || isNaN(parseFloat(order.pickup?.lng || order.pickup_lng)) || isNaN(parseFloat(order.drop?.lat || order.drop_lat)) || isNaN(parseFloat(order.drop?.lng || order.drop_lng))) && (
+              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-xs">
+                  ⚠️ Invalid location coordinates. Please check your order details.
+                </p>
               </div>
             )}
           </div>
 
           {/* Order Details - Takes 1 column */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Cancelled Order Section */}
             {order.status === 'cancelled' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   Order Cancelled
                 </h3>
-                <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-center py-4">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-2">No Riders Available</h4>
-                  <p className="text-gray-600 mb-4">
+                  <h4 className="text-base font-medium text-gray-800 mb-2">No Riders Available</h4>
+                  <p className="text-gray-600 text-sm mb-3">
                     Unfortunately, no riders were available to accept your order within the 30-minute window.
                   </p>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-sm text-red-800">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs text-red-800">
                       <strong>What you can do:</strong> Try creating a new order or check back later when more riders might be available.
                     </p>
                   </div>
-                  <div className="mt-4">
+                  <div className="mt-3">
                     <button 
                       onClick={() => window.location.href = '/orders'}
-                      className="bg-[#133bb7] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#0f2a8a] transition-colors"
+                      className="bg-[#133bb7] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#0f2a8a] transition-colors text-sm"
                     >
                       Create New Order
                     </button>
@@ -553,32 +604,32 @@ export default function OrderTrackingPage() {
 
             {/* Waiting for Rider Section */}
             {order.status === 'assigned' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   Waiting for Rider
                 </h3>
-                <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-center py-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" />
                     </svg>
                   </div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Finding a Rider</h4>
-                  <p className="text-gray-600 mb-2">
+                  <h4 className="text-base font-medium text-gray-800 mb-2">Finding a Rider</h4>
+                  <p className="text-gray-600 text-sm mb-2">
                     We're looking for riders in your area. This may take up to 30 minutes.
                   </p>
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                    <p className="text-sm text-blue-800 mb-2">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                    <p className="text-xs text-blue-800 mb-1">
                       <strong>Rider {currentRiderNumber}:</strong> {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')} remaining
                     </p>
-                    <p className="text-sm text-blue-800">
+                    <p className="text-xs text-blue-800">
                       <strong>Total time:</strong> {Math.floor(totalTimer / 60)}:{(totalTimer % 60).toString().padStart(2, '0')} remaining
                     </p>
                   </div>
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
                     <p className="text-xs text-gray-600">
                       <strong>Please wait:</strong> We'll notify you as soon as a rider accepts your order.
                     </p>
@@ -589,30 +640,30 @@ export default function OrderTrackingPage() {
 
             {/* Pricing Information */}
             {order.pricing && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 1V23M17 5H9.5C8.11929 5 7 6.11929 7 7.5S8.11929 10 9.5 10H14.5C15.8807 10 17 11.1193 17 12.5S15.8807 15 14.5 15H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   Order Pricing
                 </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Distance</span>
                     <span className="font-medium">{order.pricing.distance} km</span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Base Fare</span>
                     <span className="font-medium">₹{order.pricing.breakdown.baseFare}</span>
                   </div>
                   {order.pricing.breakdown.distanceFare > 0 && (
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-600">Distance Fare</span>
                       <span className="font-medium">₹{order.pricing.breakdown.distanceFare}</span>
                     </div>
                   )}
-                  <div className="border-t pt-3">
-                    <div className="flex justify-between items-center text-lg font-semibold">
+                  <div className="border-t pt-2">
+                    <div className="flex justify-between items-center text-base font-medium">
                       <span>Total Amount</span>
                       <span className="text-[#133bb7]">₹{order.pricing.totalPrice}</span>
                     </div>
@@ -626,9 +677,9 @@ export default function OrderTrackingPage() {
 
             {/* OTPs Section */}
             {order.status === 'accepted' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
@@ -636,52 +687,52 @@ export default function OrderTrackingPage() {
                 </h3>
                 {otps ? (
                   <>
-                    <div className="space-y-4">
-                      <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div className="space-y-3">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-3xl font-bold text-green-800 mb-1">
+                            <div className="text-2xl font-bold text-green-800 mb-1">
                               {otps.pickup_otp}
                             </div>
-                            <div className="text-sm text-green-600 font-medium">Pickup Code</div>
+                            <div className="text-xs text-green-600 font-medium">Pickup Code</div>
                           </div>
                           <div className="text-right">
                             {otps.pickup_verified ? (
-                              <span className="text-green-600 text-sm font-medium">✅ Verified</span>
+                              <span className="text-green-600 text-xs font-medium">✅ Verified</span>
                             ) : (
-                              <span className="text-gray-500 text-sm">Pending</span>
+                              <span className="text-gray-500 text-xs">Pending</span>
                             )}
                           </div>
                         </div>
                       </div>
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-3xl font-bold text-blue-800 mb-1">
+                            <div className="text-2xl font-bold text-blue-800 mb-1">
                               {otps.delivery_otp}
                             </div>
-                            <div className="text-sm text-blue-600 font-medium">Delivery Code</div>
+                            <div className="text-xs text-blue-600 font-medium">Delivery Code</div>
                           </div>
                           <div className="text-right">
                             {otps.delivery_verified ? (
-                              <span className="text-blue-600 text-sm font-medium">✅ Verified</span>
+                              <span className="text-blue-600 text-xs font-medium">✅ Verified</span>
                             ) : (
-                              <span className="text-gray-500 text-sm">Pending</span>
+                              <span className="text-gray-500 text-xs">Pending</span>
                             )}
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="mt-3 p-2 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-600">
                         Share these codes with your driver for pickup and delivery verification.
                       </p>
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-8">
-                    <div className="w-8 h-8 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600">Generating verification codes...</p>
+                  <div className="text-center py-4">
+                    <div className="w-6 h-6 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                    <p className="text-gray-600 text-sm">Generating verification codes...</p>
                   </div>
                 )}
               </div>
@@ -689,26 +740,26 @@ export default function OrderTrackingPage() {
 
             {/* Driver Info */}
             {order.driver && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   Driver Information
                 </h3>
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-gradient-to-br from-[#133bb7] to-[#3b5bc7] rounded-full flex items-center justify-center text-white font-bold text-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#133bb7] to-[#3b5bc7] rounded-full flex items-center justify-center text-white font-bold text-sm">
                     {order.driver.name?.charAt(0) || order.driver.phone?.charAt(0) || 'D'}
                   </div>
                   <div className="flex-1">
-                    <p className="font-bold text-gray-900 text-lg">
+                    <p className="font-medium text-gray-800 text-sm">
                       {order.driver.name || 'Driver'}
                     </p>
-                    <p className="text-gray-600">{order.driver.phone}</p>
-                    <div className="flex items-center gap-2 mt-2">
+                    <p className="text-gray-600 text-xs">{order.driver.phone}</p>
+                    <div className="flex items-center gap-1 mt-1">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-green-600 font-medium">Online</span>
+                      <span className="text-xs text-green-600 font-medium">Online</span>
                     </div>
                   </div>
                 </div>
@@ -717,45 +768,45 @@ export default function OrderTrackingPage() {
 
             {/* Package Details */}
             {order.package_details && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M16 11V7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7V11M5 9H19L18 21H6L5 9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   Package Details
                 </h3>
-                <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-gray-600 font-medium">Receiver</span>
-                      <span className="font-bold text-gray-900">{order.package_details.receiverName}</span>
+                <div className="space-y-3">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-gray-600 font-medium text-sm">Receiver</span>
+                      <span className="font-medium text-gray-800 text-sm">{order.package_details.receiverName}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600 font-medium">Phone</span>
-                      <span className="font-bold text-gray-900">{order.package_details.receiverPhone}</span>
+                      <span className="text-gray-600 font-medium text-sm">Phone</span>
+                      <span className="font-medium text-gray-800 text-sm">{order.package_details.receiverPhone}</span>
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 rounded-xl p-4">
-                      <div className="text-sm text-blue-600 font-medium mb-1">Category</div>
-                      <div className="font-bold text-blue-800">{order.package_details.category}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <div className="text-xs text-blue-600 font-medium mb-1">Category</div>
+                      <div className="font-medium text-blue-800 text-sm">{order.package_details.category}</div>
                     </div>
-                    <div className="bg-green-50 rounded-xl p-4">
-                      <div className="text-sm text-green-600 font-medium mb-1">Weight</div>
-                      <div className="font-bold text-green-800">{order.package_details.weight} kg</div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <div className="text-xs text-green-600 font-medium mb-1">Weight</div>
+                      <div className="font-medium text-green-800 text-sm">{order.package_details.weight} kg</div>
                     </div>
                   </div>
                   
-                  <div className="bg-yellow-50 rounded-xl p-4">
-                    <div className="text-sm text-yellow-600 font-medium mb-1">Estimated Value</div>
-                    <div className="font-bold text-yellow-800 text-lg">${order.package_details.estimatedValue}</div>
+                  <div className="bg-yellow-50 rounded-lg p-3">
+                    <div className="text-xs text-yellow-600 font-medium mb-1">Estimated Value</div>
+                    <div className="font-medium text-yellow-800 text-sm">₹{order.package_details.estimatedValue}</div>
                   </div>
                   
                   {order.package_details.description && (
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="text-sm text-gray-600 font-medium mb-2">Description</div>
-                      <p className="text-gray-800">{order.package_details.description}</p>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="text-xs text-gray-600 font-medium mb-1">Description</div>
+                      <p className="text-gray-800 text-sm">{order.package_details.description}</p>
                     </div>
                   )}
                 </div>

@@ -114,10 +114,16 @@ export default function CreateOrderPage() {
       newErrors.drop = 'Delivery location is required'
     }
     if (!pickupLocation) {
-      newErrors.pickup = 'Please select a valid pickup location'
+      newErrors.pickup = 'Please select a valid pickup location from the suggestions'
     }
     if (!dropLocation) {
-      newErrors.drop = 'Please select a valid delivery location'
+      newErrors.drop = 'Please select a valid delivery location from the suggestions'
+    }
+    if (pickupLocation && (!pickupLocation.lat || !pickupLocation.lng)) {
+      newErrors.pickup = 'Please select a valid pickup location from the suggestions'
+    }
+    if (dropLocation && (!dropLocation.lat || !dropLocation.lng)) {
+      newErrors.drop = 'Please select a valid delivery location from the suggestions'
     }
     
     setErrors(newErrors)
@@ -256,6 +262,17 @@ export default function CreateOrderPage() {
       return
     }
 
+    // Additional validation for coordinates
+    if (!pickupLocation || !dropLocation) {
+      alert('Please select valid pickup and delivery locations from the suggestions')
+      return
+    }
+
+    if (!pickupLocation.lat || !pickupLocation.lng || !dropLocation.lat || !dropLocation.lng) {
+      alert('Please select valid pickup and delivery locations from the suggestions')
+      return
+    }
+
     setShowModal(true)
     setStatus('checking')
 
@@ -331,19 +348,19 @@ export default function CreateOrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-screen bg-gray-50">
       {/* Google Maps Script Loader */}
       <GoogleMapsScript onLoad={() => setIsGoogleMapsLoaded(true)} />
       
-      <div className="max-w-4xl mx-auto px-4 md:px-6 py-8">
+      <div className="max-w-3xl mx-auto px-4 py-6">
         {/* Main Content */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-8">
+        <div className="space-y-6">
           {/* Step 1: Location */}
           {currentStep === 'location' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Where are you sending from and to?</h2>
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Where are you sending from and to?</h2>
               
-              <div className="space-y-6">
+              <div className="space-y-4">
             {/* Pickup Location */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Pickup Location</label>
@@ -367,11 +384,14 @@ export default function CreateOrderPage() {
                   type="text"
                   placeholder="Loading location services..."
                   disabled
-                        className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-500"
+                        className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
                 />
               </div>
             )}
                   {errors.pickup && <p className="text-red-500 text-sm mt-1">{errors.pickup}</p>}
+                  {!pickupLocation && pickup && (
+                    <p className="text-amber-600 text-xs mt-1">💡 Please select from the dropdown suggestions to get accurate coordinates</p>
+                  )}
                 </div>
 
             {/* Drop Location */}
@@ -397,18 +417,21 @@ export default function CreateOrderPage() {
                   type="text"
                   placeholder="Loading location services..."
                   disabled
-                        className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-500"
+                        className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
                 />
               </div>
             )}
                   {errors.drop && <p className="text-red-500 text-sm mt-1">{errors.drop}</p>}
+                  {!dropLocation && drop && (
+                    <p className="text-amber-600 text-xs mt-1">💡 Please select from the dropdown suggestions to get accurate coordinates</p>
+                  )}
           </div>
         </div>
 
-              <div className="flex justify-end mt-8">
+              <div className="flex justify-end mt-6">
                 <button
                   onClick={nextStep}
-                  className="w-full sm:w-auto bg-[#133bb7] text-white px-8 py-3 rounded-xl font-semibold hover:bg-[#0f2a8a] transition-colors"
+                  className="w-full sm:w-auto bg-[#133bb7] text-white px-6 py-2.5 rounded-lg font-medium hover:bg-[#0f2a8a] transition-colors"
                 >
                   Next: Package Details
                 </button>
@@ -418,10 +441,10 @@ export default function CreateOrderPage() {
 
           {/* Step 2: Package Details */}
           {currentStep === 'package' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">What are you sending?</h2>
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">What are you sending?</h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Receiver Name *</label>
               <input
@@ -430,7 +453,7 @@ export default function CreateOrderPage() {
                 placeholder="Enter receiver name"
                 value={packageDetails.receiverName}
                 onChange={handlePackageChange}
-                    className={`w-full px-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.receiverName ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-sm ${errors.receiverName ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
               />
                   {errors.receiverName && <p className="text-red-500 text-sm mt-1">{errors.receiverName}</p>}
             </div>
@@ -448,7 +471,7 @@ export default function CreateOrderPage() {
                   value={packageDetails.receiverPhone}
                   onChange={handlePackageChange}
                   maxLength="10"
-                      className={`w-full pl-12 pr-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.receiverPhone ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                      className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-sm ${errors.receiverPhone ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
                 />
               </div>
                   {errors.receiverPhone && <p className="text-red-500 text-sm mt-1">{errors.receiverPhone}</p>}
@@ -460,7 +483,7 @@ export default function CreateOrderPage() {
                 name="category"
                 value={packageDetails.category}
                 onChange={handlePackageChange}
-                    className={`w-full px-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 text-base ${errors.category ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 text-sm ${errors.category ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
               >
                 <option value="">Select category</option>
                     <option value="Documents">📄 Documents</option>
@@ -487,7 +510,7 @@ export default function CreateOrderPage() {
                   min="0.1"
                   max="50"
                   step="0.1"
-                      className={`w-full px-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.weight ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                      className={`w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-sm ${errors.weight ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
                 />
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 font-medium">
                   kg
@@ -511,7 +534,7 @@ export default function CreateOrderPage() {
                   min="1"
                   max="100000"
                   step="1"
-                      className={`w-full pl-8 pr-4 py-4 border rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-base ${errors.estimatedValue ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
+                      className={`w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-sm ${errors.estimatedValue ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
                 />
               </div>
                   {errors.estimatedValue && <p className="text-red-500 text-sm mt-1">{errors.estimatedValue}</p>}
@@ -526,7 +549,7 @@ export default function CreateOrderPage() {
                 onChange={handlePackageChange}
                 rows={4}
                 maxLength={200}
-                className="w-full px-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 resize-none text-base hover:border-gray-300"
+                className="w-full px-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 resize-none text-sm hover:border-gray-300"
               />
               <div className="text-right text-xs text-gray-400 mt-1">
                 {packageDetails.description.length}/200 characters
@@ -534,16 +557,16 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-between mt-8">
+              <div className="flex flex-col sm:flex-row gap-3 justify-between mt-6">
                 <button
                   onClick={prevStep}
-                  className="w-full sm:w-auto px-8 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                  className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 >
                   Back
                 </button>
                 <button
                   onClick={nextStep}
-                  className="w-full sm:w-auto bg-[#133bb7] text-white px-8 py-3 rounded-xl font-semibold hover:bg-[#0f2a8a] transition-colors"
+                  className="w-full sm:w-auto bg-[#133bb7] text-white px-6 py-2.5 rounded-lg font-medium hover:bg-[#0f2a8a] transition-colors"
                 >
                   Next: Review Order
                 </button>
@@ -553,13 +576,13 @@ export default function CreateOrderPage() {
 
           {/* Step 3: Confirm */}
           {currentStep === 'confirm' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Review Your Order</h2>
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Review Your Order</h2>
               
-              <div className="space-y-6">
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h3 className="font-semibold text-gray-900 mb-4">Locations</h3>
-                  <div className="space-y-2">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-medium text-gray-800 mb-3">Locations</h3>
+                  <div className="space-y-2 pl-4">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                       <span className="text-gray-700">{pickup}</span>
@@ -571,8 +594,8 @@ export default function CreateOrderPage() {
                   </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h3 className="font-semibold text-gray-900 mb-4">Package Details</h3>
+                <div>
+                  <h3 className="font-medium text-gray-800 mb-3">Package Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">👤</span>
@@ -602,16 +625,16 @@ export default function CreateOrderPage() {
           </div>
         </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-between mt-8">
+              <div className="flex flex-col sm:flex-row gap-3 justify-between mt-6">
                 <button
                   onClick={prevStep}
-                  className="w-full sm:w-auto px-8 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                  className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 >
                   Back
                 </button>
         <button
           onClick={handleSubmit}
-                  className="w-full sm:w-auto bg-[#133bb7] text-white px-8 py-3 rounded-xl font-semibold hover:bg-[#0f2a8a] transition-colors"
+                  className="w-full sm:w-auto bg-[#133bb7] text-white px-6 py-2.5 rounded-lg font-medium hover:bg-[#0f2a8a] transition-colors"
         >
                   Create Order
         </button>
@@ -623,23 +646,23 @@ export default function CreateOrderPage() {
         {/* Modal for Order Processing */}
         {showModal && (
           <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border border-gray-200">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl border border-gray-200">
               {status === 'checking' && (
                 <div className="text-center">
                   <div className="w-16 h-16 border-4 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Finding Drivers</h3>
-                  <p className="text-gray-600">Searching for available drivers in your area...</p>
+                  <h3 className="text-lg font-medium text-gray-800 mb-2">Finding Drivers</h3>
+                  <p className="text-gray-600 text-sm">Searching for available drivers in your area...</p>
           </div>
         )}
 
         {status === 'waiting' && (
                <div className="text-center">
                  <div className="w-16 h-16 border-4 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Waiting for Rider</h3>
-                 <p className="text-gray-600">
+                 <h3 className="text-lg font-medium text-gray-800 mb-2">Waiting for Rider</h3>
+                 <p className="text-gray-600 text-sm">
                    {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')} remaining for current rider
                  </p>
-                 <p className="text-sm text-gray-500 mt-2">
+                 <p className="text-xs text-gray-500 mt-2">
                    Total time: {Math.floor(totalTimer / 60)}:{(totalTimer % 60).toString().padStart(2, '0')} remaining
                  </p>
                </div>
@@ -652,8 +675,8 @@ export default function CreateOrderPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                     </svg>
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Order Accepted!</h3>
-                  <p className="text-gray-600">Redirecting to tracking page...</p>
+                  <h3 className="text-lg font-medium text-gray-800 mb-2">Order Accepted!</h3>
+                  <p className="text-gray-600 text-sm">Redirecting to tracking page...</p>
                 </div>
               )}
               
@@ -664,11 +687,11 @@ export default function CreateOrderPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
               </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Drivers Available</h3>
-                  <p className="text-gray-600 mb-4">No drivers accepted your order. Please try again later.</p>
+                  <h3 className="text-lg font-medium text-gray-800 mb-2">No Drivers Available</h3>
+                  <p className="text-gray-600 text-sm mb-4">No drivers accepted your order. Please try again later.</p>
                   <button
                     onClick={resetForm}
-                    className="bg-[#133bb7] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#0f2a8a] transition-colors"
+                    className="bg-[#133bb7] text-white px-6 py-2.5 rounded-lg font-medium hover:bg-[#0f2a8a] transition-colors"
                   >
                     Try Again
                   </button>
@@ -681,9 +704,9 @@ export default function CreateOrderPage() {
 
         {/* Recent Order Section */}
         {historyLoading ? (
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Order</h2>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6">
+          <div className="mt-6">
+            <h2 className="text-lg font-medium text-gray-800 mb-4">Recent Order</h2>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-center py-8">
                 <div className="w-8 h-8 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                 <p className="text-gray-600">Loading recent order...</p>
@@ -691,14 +714,14 @@ export default function CreateOrderPage() {
             </div>
           </div>
         ) : orderHistory.length > 0 && (
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Order</h2>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6">
+          <div className="mt-6">
+            <h2 className="text-lg font-medium text-gray-800 mb-4">Recent Order</h2>
+            <div>
               {(() => {
                 const recentOrder = orderHistory[0]
                 return (
                   <div 
-                    className={`border border-gray-200 rounded-xl p-4 md:p-6 hover:shadow-md transition-all ${
+                    className={`bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-all ${
                       (recentOrder.status === 'accepted' || recentOrder.status === 'delivered') ? 'cursor-pointer hover:border-[#133bb7]' : ''
                     }`}
                     onClick={() => {
@@ -707,26 +730,26 @@ export default function CreateOrderPage() {
                       }
                     }}
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-4 h-4 rounded-full ${getStatusColor(recentOrder.status)}`}></div>
-                        <span className="font-bold text-gray-900 text-lg">Order #{recentOrder.id.slice(-8)}</span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(recentOrder.status)} bg-opacity-10`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${getStatusColor(recentOrder.status)}`}></div>
+                        <span className="font-medium text-gray-800 text-sm">Order #{recentOrder.id.slice(-8)}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(recentOrder.status)} bg-opacity-10`}>
                           {getStatusIcon(recentOrder.status)} {recentOrder.status.charAt(0).toUpperCase() + recentOrder.status.slice(1)}
                         </span>
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs text-gray-500">
                         {new Date(recentOrder.created_at).toLocaleDateString()}
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 gap-3 text-sm">
+                    <div className="grid grid-cols-1 gap-2 text-xs">
                         <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                           <span className="text-gray-600">Pickup: {recentOrder.pickup_address || `${recentOrder.pickup_lat.toFixed(4)}, ${recentOrder.pickup_lng.toFixed(4)}`}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                           <span className="text-gray-600">Delivery: {recentOrder.drop_address || `${recentOrder.drop_lat.toFixed(4)}, ${recentOrder.drop_lng.toFixed(4)}`}</span>
                         </div>
                       {recentOrder.driver && (
@@ -749,10 +772,10 @@ export default function CreateOrderPage() {
                     </div>
                     
                     {(recentOrder.status === 'accepted' || recentOrder.status === 'delivered') && (
-                      <div className="mt-4 pt-4 border-t border-gray-100">
+                      <div className="mt-3 pt-3 border-t border-gray-100">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-500">Click to track this order</span>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#133bb7]">
+                          <span className="text-xs text-gray-500">Click to track this order</span>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#133bb7]">
                             <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
@@ -767,9 +790,9 @@ export default function CreateOrderPage() {
 
         {/* Order History Section */}
         {historyLoading ? (
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Previous Orders</h2>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6">
+          <div className="mt-6">
+            <h2 className="text-lg font-medium text-gray-800 mb-4">Previous Orders</h2>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-center py-8">
                 <div className="w-8 h-8 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                 <p className="text-gray-600">Loading previous orders...</p>
@@ -777,15 +800,15 @@ export default function CreateOrderPage() {
             </div>
           </div>
         ) : orderHistory.length > 1 && (
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Previous Orders</h2>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6">
+          <div className="mt-6">
+            <h2 className="text-lg font-medium text-gray-800 mb-4">Previous Orders</h2>
+            <div>
               {/* Mobile-friendly tabs */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <div className="flex overflow-x-auto gap-2 pb-2">
                   <button
                     onClick={() => setActiveTab('all')}
-                    className={`px-4 py-2 rounded-xl font-semibold text-sm whitespace-nowrap transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-colors ${
                       activeTab === 'all' 
                         ? 'bg-[#133bb7] text-white' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -795,7 +818,7 @@ export default function CreateOrderPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab('accepted')}
-                    className={`px-4 py-2 rounded-xl font-semibold text-sm whitespace-nowrap transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-colors ${
                       activeTab === 'accepted' 
                         ? 'bg-[#133bb7] text-white' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -805,7 +828,7 @@ export default function CreateOrderPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab('delivered')}
-                    className={`px-4 py-2 rounded-xl font-semibold text-sm whitespace-nowrap transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-colors ${
                       activeTab === 'delivered' 
                         ? 'bg-[#133bb7] text-white' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -815,7 +838,7 @@ export default function CreateOrderPage() {
                   </button>
                   <button
                     onClick={() => setActiveTab('cancelled')}
-                    className={`px-4 py-2 rounded-xl font-semibold text-sm whitespace-nowrap transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-colors ${
                       activeTab === 'cancelled' 
                         ? 'bg-[#133bb7] text-white' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -827,19 +850,19 @@ export default function CreateOrderPage() {
               </div>
 
               {historyLoading ? (
-                <div className="text-center py-8">
-                  <div className="w-8 h-8 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading order history...</p>
+                <div className="text-center py-6">
+                  <div className="w-6 h-6 border-2 border-[#133bb7] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-gray-600 text-sm">Loading order history...</p>
                 </div>
               ) : getFilteredOrders().length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-400">
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-400">
                       <path d="M16 11V7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7V11M5 9H19L18 21H6L5 9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">No Orders Found</h3>
-                  <p className="text-gray-600">
+                  <h3 className="text-base font-medium text-gray-800 mb-2">No Orders Found</h3>
+                  <p className="text-gray-600 text-sm">
                     {activeTab === 'all' 
                       ? "You haven't placed any orders yet." 
                       : `No ${activeTab} orders found.`
@@ -847,11 +870,11 @@ export default function CreateOrderPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {getFilteredOrders().map((order) => (
                     <div 
                       key={order.id} 
-                      className={`border border-gray-200 rounded-xl p-4 md:p-6 hover:shadow-md transition-all ${
+                      className={`bg-white border border-gray-200 rounded-lg p-3 hover:shadow-sm transition-all ${
                         (order.status === 'accepted' || order.status === 'delivered') ? 'cursor-pointer hover:border-[#133bb7]' : ''
                       }`}
                       onClick={() => {
@@ -860,26 +883,26 @@ export default function CreateOrderPage() {
                         }
                       }}
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-4 h-4 rounded-full ${getStatusColor(order.status)}`}></div>
-                          <span className="font-bold text-gray-900 text-lg">Order #{order.id.slice(-8)}</span>
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(order.status)} bg-opacity-10`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded-full ${getStatusColor(order.status)}`}></div>
+                          <span className="font-medium text-gray-800 text-sm">Order #{order.id.slice(-8)}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)} bg-opacity-10`}>
                             {getStatusIcon(order.status)} {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                           </span>
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-xs text-gray-500">
                           {new Date(order.created_at).toLocaleDateString()}
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-1 gap-3 text-sm">
+                      <div className="grid grid-cols-1 gap-2 text-xs">
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                             <span className="text-gray-600">Pickup: {order.pickup_address || `${order.pickup_lat.toFixed(4)}, ${order.pickup_lng.toFixed(4)}`}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                             <span className="text-gray-600">Delivery: {order.drop_address || `${order.drop_lat.toFixed(4)}, ${order.drop_lng.toFixed(4)}`}</span>
                           </div>
                         {order.driver && (
@@ -901,11 +924,11 @@ export default function CreateOrderPage() {
                         )}
                       </div>
                       
-                      {(order.status === 'accepted' || order.status === 'delivered') && (
-                        <div className="mt-4 pt-4 border-t border-gray-100">
+                        {(order.status === 'accepted' || order.status === 'delivered') && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-500">Click to track this order</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#133bb7]">
+                            <span className="text-xs text-gray-500">Click to track this order</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#133bb7]">
                               <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           </div>
