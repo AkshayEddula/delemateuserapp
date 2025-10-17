@@ -8,9 +8,9 @@ export default function Navbar() {
   const [open, setOpen] = useState(false)
 
   return (
-    <nav className="w-full  sticky top-0 z-50">
+    <nav className="w-full sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-        <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl shadow-lg">
+        <div className="backdrop-blur-xl bg-white/90 border border-gray-200 rounded-2xl shadow-lg">
           <div className="px-4 py-2 flex items-center justify-between">
             {/* Logo */}
             <Link href="/" className="text-[#133bb7] font-bold text-xl tracking-tight">

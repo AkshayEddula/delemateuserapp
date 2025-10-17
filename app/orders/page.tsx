@@ -599,27 +599,27 @@ export default function CreateOrderPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">👤</span>
-                      <span><strong>Receiver:</strong> {packageDetails.receiverName}</span>
+                      <span className="text-gray-800"><strong>Receiver:</strong> {packageDetails.receiverName}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">📱</span>
-                      <span><strong>Phone:</strong> {packageDetails.receiverPhone}</span>
+                      <span className="text-gray-800"><strong>Phone:</strong> {packageDetails.receiverPhone}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">📦</span>
-                      <span><strong>Category:</strong> {packageDetails.category}</span>
+                      <span className="text-gray-800"><strong>Category:</strong> {packageDetails.category}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">⚖️</span>
-                      <span><strong>Weight:</strong> {packageDetails.weight} kg</span>
+                      <span className="text-gray-800"><strong>Weight:</strong> {packageDetails.weight} kg</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">💰</span>
-                      <span><strong>Value:</strong> ₹{packageDetails.estimatedValue}</span>
+                      <span className="text-gray-800"><strong>Value:</strong> ₹{packageDetails.estimatedValue}</span>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="text-gray-500 mt-1">📝</span>
-                      <span><strong>Description:</strong> {packageDetails.description || 'None'}</span>
+                      <span className="text-gray-800"><strong>Description:</strong> {packageDetails.description || 'None'}</span>
                     </div>
             </div>
           </div>

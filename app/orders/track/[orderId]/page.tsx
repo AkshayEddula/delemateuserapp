@@ -650,21 +650,21 @@ export default function OrderTrackingPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Distance</span>
-                    <span className="font-medium">{order.pricing.distance} km</span>
+                    <span className="font-medium text-gray-800">{order.pricing.distance} km</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Base Fare</span>
-                    <span className="font-medium">₹{order.pricing.breakdown.baseFare}</span>
+                    <span className="font-medium text-gray-800">₹{order.pricing.breakdown.baseFare}</span>
                   </div>
                   {order.pricing.breakdown.distanceFare > 0 && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-600">Distance Fare</span>
-                      <span className="font-medium">₹{order.pricing.breakdown.distanceFare}</span>
+                      <span className="font-medium text-gray-800">₹{order.pricing.breakdown.distanceFare}</span>
                     </div>
                   )}
                   <div className="border-t pt-2">
                     <div className="flex justify-between items-center text-base font-medium">
-                      <span>Total Amount</span>
+                      <span className="text-gray-800">Total Amount</span>
                       <span className="text-[#133bb7]">₹{order.pricing.totalPrice}</span>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
