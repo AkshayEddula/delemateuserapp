@@ -602,7 +602,7 @@ export default function CreateOrderPage() {
                   placeholder="Enter 10-digit phone number"
                   value={packageDetails.receiverPhone}
                   onChange={handlePackageChange}
-                  maxLength="10"
+                  maxLength={10}
                       className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#133bb7] focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 text-sm ${errors.receiverPhone ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}
                 />
               </div>
@@ -867,10 +867,10 @@ export default function CreateOrderPage() {
                 return (
                   <div 
                     className={`bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-all ${
-                      (recentOrder.status === 'accepted' || recentOrder.status === 'delivered') ? 'cursor-pointer hover:border-[#133bb7]' : ''
+                      (recentOrder.status === 'assigned' || recentOrder.status === 'accepted' || recentOrder.status === 'delivered') ? 'cursor-pointer hover:border-[#133bb7]' : ''
                     }`}
                     onClick={() => {
-                      if (recentOrder.status === 'accepted' || recentOrder.status === 'delivered') {
+                      if (recentOrder.status === 'assigned' || recentOrder.status === 'accepted' || recentOrder.status === 'delivered') {
                         window.location.href = `/orders/track/${recentOrder.id}`
                       }
                     }}
@@ -880,7 +880,8 @@ export default function CreateOrderPage() {
                         <div className={`w-3 h-3 rounded-full ${getStatusColor(recentOrder.status)}`}></div>
                         <span className="font-medium text-gray-800 text-sm">Order #{recentOrder.id.slice(-8)}</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(recentOrder.status)} bg-opacity-10`}>
-                          {getStatusIcon(recentOrder.status)} {recentOrder.status.charAt(0).toUpperCase() + recentOrder.status.slice(1)}
+                          {getStatusIcon(recentOrder.status)} {recentOrder.status === 'assigned' ? 'Finding riders' :
+                           recentOrder.status.charAt(0).toUpperCase() + recentOrder.status.slice(1)}
                         </span>
                       </div>
                       <div className="text-xs text-gray-500">
