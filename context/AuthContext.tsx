@@ -17,7 +17,7 @@ type AuthContextType = {
   user: User | null
   loading: boolean
   login: (phone: string, otp: string) => Promise<boolean>
-  requestOtp: (phone: string) => void
+  requestOtp: (phone: string) => Promise<boolean>
   logout: () => void
 }
 
@@ -26,6 +26,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [otpRequestInProgress, setOtpRequestInProgress] = useState(false)
 
   useEffect(() => {
     // Check for existing session token
@@ -63,14 +64,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     checkSession()
   }, [])
 
-  // Send real OTP
-  const requestOtp = async (phone: string) => {
+  // Send OTP via server-side API
+  const requestOtp = async (phone: string): Promise<boolean> => {
+    // Prevent multiple simultaneous requests
+    if (otpRequestInProgress) {
+      console.log('OTP request already in progress, ignoring duplicate request')
+      return false
+    }
+
+    setOtpRequestInProgress(true)
+    
     try {
-      const response = await fetch('https://delemate-api.onrender.com/api/auth/send-otp', {
+      const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
         body: JSON.stringify({
           phoneNumber: phone
@@ -79,7 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        alert(errorData.message || 'Failed to send OTP')
+        alert(errorData.error || 'Failed to send OTP')
         return false
       }
 
@@ -90,6 +98,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error('OTP request error:', error)
       alert('Failed to send OTP. Please try again.')
       return false
+    } finally {
+      setOtpRequestInProgress(false)
     }
   }
 
@@ -97,12 +107,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(true)
     
     try {
-      // First verify OTP with your API
-      const otpResponse = await fetch('https://delemate-api.onrender.com/api/auth/verify-otp', {
+      // First verify OTP via server-side API
+      const otpResponse = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
         body: JSON.stringify({
           phoneNumber: phone,
@@ -112,7 +121,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!otpResponse.ok) {
         const errorData = await otpResponse.json()
-        alert(errorData.message || 'Invalid OTP')
+        alert(errorData.error || 'Invalid OTP')
         setLoading(false)
         return false
       }
